@@ -3,7 +3,7 @@
            [java.security SecureRandom MessageDigest Signature
             PublicKey PrivateKey KeyPair KeyPairGenerator]
            [java.security.spec AlgorithmParameterSpec RSAKeyGenParameterSpec ECGenParameterSpec]
-           [javax.crypto Mac Cipher]
+           [javax.crypto Mac Cipher KeyAgreement]
            [javax.crypto.spec SecretKeySpec IvParameterSpec GCMParameterSpec]))
 
 (set! clojure.core/*warn-on-reflection* true)
@@ -93,9 +93,9 @@
 
 ;;; pubkey
 
-;;;; gen
+;;;; kpg
 
-;; algo: RSA EC Ed25519
+;; algo: RSA EC X25519 Ed25519
 
 (defmulti ^AlgorithmParameterSpec as-kpg-param-by-algo
   (fn [_param algo] algo))
@@ -113,7 +113,7 @@
       param
       (as-kpg-param-by-algo param algo))))
 
-(defn kp-gen
+(defn kpg
   (^KeyPair [^String algo]
    (kp-gen algo nil))
   (^KeyPair [^String algo param]
@@ -121,6 +121,17 @@
      (when (some? param)
        (.initialize kpg (as-kpg-param param algo)))
      (.generateKeyPair kpg))))
+
+;;;; ka
+
+;; algo: ECDH X25519
+
+(defn ka
+  ^bytes [^String algo ^PrivateKey prikey ^PublicKey peer-pubkey]
+  (let [ka (doto (KeyAgreement/getInstance algo)
+             (.init prikey)
+             (.doPhase peer-pubkey true))]
+    (.generateSecret ka)))
 
 ;;;; sign
 
