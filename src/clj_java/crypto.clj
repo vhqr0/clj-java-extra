@@ -3,8 +3,8 @@
            [java.security SecureRandom MessageDigest Signature
             PublicKey PrivateKey KeyPair KeyPairGenerator]
            [java.security.spec AlgorithmParameterSpec RSAKeyGenParameterSpec ECGenParameterSpec]
-           [javax.crypto Mac Cipher KeyAgreement]
-           [javax.crypto.spec SecretKeySpec IvParameterSpec GCMParameterSpec]))
+           [javax.crypto Mac KDF Cipher KeyAgreement]
+           [javax.crypto.spec SecretKeySpec HKDFParameterSpec IvParameterSpec GCMParameterSpec]))
 
 (set! clojure.core/*warn-on-reflection* true)
 
@@ -46,15 +46,28 @@
   (-> (MessageDigest/getInstance algo)
       (.digest data)))
 
-;;; mac
+;;; hmac
 
 ;; algo: HmacMD5 HmacSHA1 HmacSHA256
 
-(defn mac
+(defn hmac
   ^bytes [^String algo key ^bytes data]
   (let [mac (doto (Mac/getInstance algo)
               (.init (as-key key algo)))]
     (.doFinal mac data)))
+
+;;; kdf
+
+;; algo: HKDF-SHA256
+
+(defn hkdf
+  ^bytes [^String algo ^bytes ikm ^bytes salt ^bytes info length]
+  (let [kdf (KDF/getInstance algo)
+        param (-> (HKDFParameterSpec/ofExtract)
+                  (.addIKM ikm)
+                  (.addSalt salt)
+                  (.thenExpand info length))]
+    (.deriveData kdf param)))
 
 ;;; cipher
 
@@ -115,7 +128,7 @@
 
 (defn kpg
   (^KeyPair [^String algo]
-   (kp-gen algo nil))
+   (kpg algo nil))
   (^KeyPair [^String algo param]
    (let [kpg (KeyPairGenerator/getInstance algo)]
      (when (some? param)
