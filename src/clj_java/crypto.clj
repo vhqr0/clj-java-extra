@@ -1,7 +1,6 @@
 (ns clj-java.crypto
   (:import [java.util HexFormat]
-           [java.security SecureRandom MessageDigest Signature
-            PublicKey PrivateKey KeyPair KeyPairGenerator]
+           [java.security SecureRandom MessageDigest Signature PublicKey PrivateKey KeyPair KeyPairGenerator]
            [java.security.spec AlgorithmParameterSpec RSAKeyGenParameterSpec ECGenParameterSpec]
            [javax.crypto Mac KDF Cipher KeyAgreement]
            [javax.crypto.spec SecretKeySpec HKDFParameterSpec IvParameterSpec GCMParameterSpec]))
@@ -56,7 +55,7 @@
               (.init (as-key key algo)))]
     (.doFinal mac data)))
 
-;;; kdf
+;;; hkdf
 
 ;; algo: HKDF-SHA256
 ;; NOTE kdf require java25
