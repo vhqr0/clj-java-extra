@@ -59,6 +59,7 @@
 ;;; kdf
 
 ;; algo: HKDF-SHA256
+;; NOTE kdf require java25
 
 (defn hkdf
   ^bytes [^String algo ^bytes ikm ^bytes salt ^bytes info length]
