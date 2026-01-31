@@ -1,5 +1,7 @@
 (ns clj-java.net
-  (:import [java.net InetAddress SocketAddress InetSocketAddress Socket URL URI]))
+  (:import [java.io InputStream OutputStream]
+           [java.net InetAddress SocketAddress InetSocketAddress Socket URL URI]
+           [javax.net.ssl SSLSocketFactory]))
 
 (set! clojure.core/*warn-on-reflection* true)
 
@@ -62,12 +64,17 @@
   ^Socket [x & opts]
   (make-socket x (when opts (apply hash-map opts))))
 
-(extend-type SocketAddress
+(extend-type InetSocketAddress
   SocketFactory
   (make-socket [a opts]
-    (let [{:keys [timeout] :or {timeout 0}} opts]
-      (doto (Socket.)
-        (.connect a timeout)))))
+    (let [{:keys [timeout ssl? ssl-host] :or {timeout 0}} opts
+          socket (doto (Socket.) (.connect a timeout))]
+      (if-not ssl?
+        socket
+        (let [^SSLSocketFactory factory (SSLSocketFactory/getDefault)
+              ^String host (or ssl-host (.getHostName a))
+              port (.getPort a)]
+          (.createSocket factory socket host port true))))))
 
 ;;; url
 
@@ -75,9 +82,18 @@
   IACoercions
   (as-ia [url] (as-ia (.getHost url)))
   SACoercions
-  (as-sa [url] (as-sa [(.getHost url) (.getPort url)]))
+  (as-sa [url]
+    (let [host (.getHost url)
+          port (or
+                (let [port (.getPort url)]
+                  (when-not (= -1 port)
+                    port))
+                (.getDefaultPort url))]
+      (as-sa [host port])))
   SocketFactory
-  (make-socket [url opts] (make-socket (as-sa url) opts)))
+  (make-socket [url opts]
+    (let [ssl? (= "https" (.getProtocol url))]
+      (make-socket (as-sa url) (merge {:ssl? ssl?} opts)))))
 
 (extend-type URI
   IACoercions
@@ -86,3 +102,17 @@
   (as-sa [uri] (as-sa (.toURL uri)))
   SocketFactory
   (make-socket [uri opts] (make-socket (.toURL uri) opts)))
+
+(comment
+  (defn test-curl
+    [url]
+    (let [url (URL. url)
+          host (.getHost url)
+          req (format "GET / HTTP/1.1\r\nHost: %s\r\n\r\n" host)]
+      (with-open [s (socket url)]
+        (let [is (.getInputStream s)
+              os (.getOutputStream s)
+              fut (future (slurp is))]
+          (.write os (.getBytes req))
+          (.shutdownOutput s)
+          @fut)))))
