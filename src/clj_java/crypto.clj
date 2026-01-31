@@ -136,6 +136,7 @@
 ;;;; sign
 
 ;; algo: RSASSA-PSS SHA256withRSA SHA256withECDSA EdDSA
+;; TODO RSASSA-PSS require pss params
 
 (defn sign
   ^bytes [^String algo ^PrivateKey prikey ^bytes data]
