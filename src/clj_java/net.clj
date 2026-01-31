@@ -5,8 +5,6 @@
 
 (set! clojure.core/*warn-on-reflection* true)
 
-(def byte-array-type (class (make-array Byte/TYPE 0)))
-
 ;;; inet addr
 
 (defprotocol IACoercions

@@ -1,0 +1,91 @@
+(ns clj-java.crypto
+  (:import [java.util HexFormat]
+           [java.security SecureRandom MessageDigest]
+           [java.security.spec AlgorithmParameterSpec]
+           [javax.crypto Mac Cipher]
+           [javax.crypto.spec SecretKeySpec IvParameterSpec GCMParameterSpec]))
+
+(set! clojure.core/*warn-on-reflection* true)
+
+;;; key utils
+
+(defn hex->bytes
+  ^bytes [^String s]
+  (let [hf (HexFormat/of)]
+    (.parseHex hf s)))
+
+(defn bytes->hex
+  ^String [^bytes b]
+  (let [hf (HexFormat/of)]
+    (.formatHex hf b)))
+
+(defn rand-bytes
+  ^bytes [^long n]
+  (let [b (byte-array n)]
+    (-> (SecureRandom.) (.nextBytes b))
+    b))
+
+(defprotocol KeyCoercions
+  (^SecretKeySpec as-key [x algo]))
+
+(extend-type SecretKeySpec
+  KeyCoercions
+  (as-key [key _algo] key))
+
+(extend-type byte/1
+  KeyCoercions
+  (as-key [key algo] (SecretKeySpec. key algo)))
+
+;;; digest
+
+;; algo: MD5 SHA1 SHA256
+
+(defn digest
+  ^bytes [^String algo ^bytes data]
+  (-> (MessageDigest/getInstance algo)
+      (.digest data)))
+
+;;; mac
+
+;; algo: HmacMD5 HmacSHA1 HmacSHA256
+
+(defn mac
+  ^bytes [^String algo key ^bytes data]
+  (let [mac (doto (Mac/getInstance algo)
+              (.init (as-key key algo)))]
+    (.doFinal mac data)))
+
+;;; cipher
+
+;; algo: AES/CBC/PKCS5Padding AES/GCM/NoPadding ChaCha20-Poly1305
+
+(defmulti ^AlgorithmParameterSpec as-param-by-algo
+  (fn [_param algo] algo))
+
+(defmethod as-param-by-algo :default [param _algo]
+  (IvParameterSpec. param))
+
+(defmethod as-param-by-algo "AES/GCM/NoPadding" [param _algo]
+  (GCMParameterSpec. 128 param))
+
+(defn as-param
+  ^AlgorithmParameterSpec [param algo]
+  (when (some? param)
+    (if (instance? AlgorithmParameterSpec param)
+      param
+      (as-param-by-algo param algo))))
+
+(defn crypt
+  (^bytes [mode ^String algo key param ^bytes data]
+   (crypt mode algo key param data nil))
+  (^bytes [mode ^String algo key param ^bytes data ^bytes aad]
+   (let [cipher (doto (Cipher/getInstance algo)
+                  (.init (int mode)
+                         (as-key key algo)
+                         (as-param param algo)))]
+     (when (some? aad)
+       (.updateAAD cipher aad))
+     (.doFinal cipher data))))
+
+(def encrypt (partial crypt Cipher/ENCRYPT_MODE))
+(def decrypt (partial crypt Cipher/DECRYPT_MODE))
