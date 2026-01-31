@@ -1,7 +1,8 @@
 (ns clj-java.crypto
   (:import [java.util HexFormat]
-           [java.security SecureRandom MessageDigest]
-           [java.security.spec AlgorithmParameterSpec]
+           [java.security SecureRandom MessageDigest Signature
+            PublicKey PrivateKey KeyPair KeyPairGenerator]
+           [java.security.spec AlgorithmParameterSpec RSAKeyGenParameterSpec ECGenParameterSpec]
            [javax.crypto Mac Cipher]
            [javax.crypto.spec SecretKeySpec IvParameterSpec GCMParameterSpec]))
 
@@ -59,21 +60,21 @@
 
 ;; algo: AES/CBC/PKCS5Padding AES/GCM/NoPadding ChaCha20-Poly1305
 
-(defmulti ^AlgorithmParameterSpec as-param-by-algo
+(defmulti ^AlgorithmParameterSpec as-cipher-param-by-algo
   (fn [_param algo] algo))
 
-(defmethod as-param-by-algo :default [param _algo]
+(defmethod as-cipher-param-by-algo :default [param _algo]
   (IvParameterSpec. param))
 
-(defmethod as-param-by-algo "AES/GCM/NoPadding" [param _algo]
+(defmethod as-cipher-param-by-algo "AES/GCM/NoPadding" [param _algo]
   (GCMParameterSpec. 128 param))
 
-(defn as-param
+(defn as-cipher-param
   ^AlgorithmParameterSpec [param algo]
   (when (some? param)
     (if (instance? AlgorithmParameterSpec param)
       param
-      (as-param-by-algo param algo))))
+      (as-cipher-param-by-algo param algo))))
 
 (defn crypt
   (^bytes [mode ^String algo key param ^bytes data]
@@ -82,10 +83,59 @@
    (let [cipher (doto (Cipher/getInstance algo)
                   (.init (int mode)
                          (as-key key algo)
-                         (as-param param algo)))]
+                         (as-cipher-param param algo)))]
      (when (some? aad)
        (.updateAAD cipher aad))
      (.doFinal cipher data))))
 
 (def encrypt (partial crypt Cipher/ENCRYPT_MODE))
 (def decrypt (partial crypt Cipher/DECRYPT_MODE))
+
+;;; pubkey
+
+;;;; gen
+
+;; algo: RSA EC Ed25519
+
+(defmulti ^AlgorithmParameterSpec as-kpg-param-by-algo
+  (fn [_param algo] algo))
+
+(defmethod as-kpg-param-by-algo "RSA" [param _algo]
+  (RSAKeyGenParameterSpec. param RSAKeyGenParameterSpec/F4))
+
+(defmethod as-kpg-param-by-algo "EC" [param _algo]
+  (ECGenParameterSpec. param))
+
+(defn as-kpg-param
+  ^AlgorithmParameterSpec [param algo]
+  (when (some? param)
+    (if (instance? AlgorithmParameterSpec param)
+      param
+      (as-kpg-param-by-algo param algo))))
+
+(defn kp-gen
+  (^KeyPair [^String algo]
+   (kp-gen algo nil))
+  (^KeyPair [^String algo param]
+   (let [kpg (KeyPairGenerator/getInstance algo)]
+     (when (some? param)
+       (.initialize kpg (as-kpg-param param algo)))
+     (.generateKeyPair kpg))))
+
+;;;; sign
+
+;; algo: RSASSA-PSS SHA256withRSA SHA256withECDSA EdDSA
+
+(defn sign
+  ^bytes [^String algo ^PrivateKey prikey ^bytes data]
+  (let [signer (doto (Signature/getInstance algo)
+                 (.initSign prikey)
+                 (.update data))]
+    (.sign signer)))
+
+(defn verify
+  ^Boolean [^String algo ^PublicKey pubkey ^bytes data ^bytes sign]
+  (let [verifier (doto (Signature/getInstance algo)
+                   (.initVerify pubkey)
+                   (.update data))]
+    (.verify verifier sign)))
