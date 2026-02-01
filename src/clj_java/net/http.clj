@@ -2,7 +2,7 @@
   (:import [java.util Arrays HashMap]
            [java.util.function BiPredicate]
            [java.time Duration]
-           [java.io File InputStream]
+           [java.io InputStream]
            [java.net URI ProxySelector]
            [java.net.http
             HttpHeaders HttpClient HttpClient$Builder HttpClient$Version HttpClient$Redirect
@@ -120,10 +120,6 @@
 (extend-type byte/1
   BodyCoercions
   (as-body [b] (HttpRequest$BodyPublishers/ofByteArray b)))
-
-(extend-type File
-  BodyCoercions
-  (as-body [f] (HttpRequest$BodyPublishers/ofFile f)))
 
 (extend-type InputStream
   BodyCoercions
