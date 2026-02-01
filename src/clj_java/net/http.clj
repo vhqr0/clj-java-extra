@@ -170,5 +170,6 @@
    (let [{:keys [as]} req
          req (->request req)
          resp (.send client req (as-body-handler as))]
-     {:body (.body resp)
+     {:status (.statusCode resp)
+      :body (.body resp)
       :headers (headers->map (.headers resp))})))
